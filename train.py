@@ -11,13 +11,13 @@ from keras.callbacks import ReduceLROnPlateau
 from keras import backend as K
 from keras.utils import np_utils
 
-K.set_image_dim_ordering('th')
+# K.set_image_dim_ordering('th')
 
 batch_size = 128
 seed = 7
 np.random.seed(seed)
 random_seed = 2
-epochs = 1
+epochs = 30
 
 img_rows, img_cols = 28, 28
 
@@ -25,8 +25,20 @@ img_rows, img_cols = 28, 28
 (X_train, y_train), (X_test, y_test) = mnist.load_data()
 
 # reshape to be [samples][pixels][width][height]
-X_train = X_train.reshape(X_train.shape[0], 1, img_rows, img_cols).astype('float32')
-X_test = X_test.reshape(X_test.shape[0], 1, img_rows, img_cols).astype('float32')
+# X_train = X_train.reshape(X_train.shape[0], img_rows, img_cols, 1).astype('float32')
+# X_test = X_test.reshape(X_test.shape[0], img_rows, img_cols, 1).astype('float32')
+
+if K.image_data_format() == 'channels_first':
+    X_train = X_train.reshape(X_train.shape[0], 1, img_rows, img_cols)
+    X_test = X_test.reshape(X_test.shape[0], 1, img_rows, img_cols)
+    input_shape = (1, img_rows, img_cols)
+else:
+    X_train = X_train.reshape(X_train.shape[0], img_rows, img_cols, 1)
+    X_test = X_test.reshape(X_test.shape[0], img_rows, img_cols, 1)
+    input_shape = (img_rows, img_cols, 1)
+
+X_train = X_train.astype('float32')
+X_test = X_test.astype('float32')
 
 # We perform a grayscale normalization to reduce the effect of illumination's differences.
 # Moreover the CNN converg faster on [0..1] data than on [0..255].
@@ -38,7 +50,7 @@ print('x_train shape:', X_train.shape)
 print(X_train.shape[0], 'train samples')
 print(X_test.shape[0], 'test samples')
 
-input_shape = (1, img_rows, img_cols)
+# input_shape = (1, img_rows, img_cols)
 
 # one hot encode outputs
 y_train = np_utils.to_categorical(y_train)
@@ -106,3 +118,20 @@ with open("./model/model.json", "w") as json_file:
 model.save_weights("model.h5")
 model.save_weights("./model/model.h5")
 print("Saved weights of model")
+
+
+class LossHistory(keras.callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = []
+
+    def on_batch_end(self, batch, logs={}):
+        self.losses.append(logs.get('loss'))
+
+
+history = LossHistory()
+model.fit(X_train, y_train, batch_size=128, epochs=30, verbose=0, callbacks=[history])
+
+from keras.callbacks import CSVLogger
+
+csv_logger = CSVLogger('log.csv', append=True, separator=',')
+model.fit(X_train, y_train, callbacks=[csv_logger])
